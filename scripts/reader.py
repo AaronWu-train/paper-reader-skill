@@ -7,6 +7,7 @@ import copy
 import csv
 import hashlib
 import html as stdhtml
+from html.parser import HTMLParser
 import json
 import importlib.util
 import os
@@ -117,6 +118,57 @@ def all_units(content):
             continue
         for u in b.get("units", []):
             yield b, u
+
+
+def token_preview(fragment):
+    """Readable context only; the original protected fragment stays on disk."""
+    class Preview(HTMLParser):
+        def __init__(self):
+            super().__init__();self.parts=[];self.tags=[]
+        def handle_starttag(self,tag,attrs):
+            self.tags.append(tag)
+            if tag=='img':self.parts.append(dict(attrs).get('alt',''))
+        def handle_data(self,data):self.parts.append(data)
+    parser=Preview();parser.feed(fragment)
+    text=' '.join(' '.join(parser.parts).split())
+    kind=next((tag for tag in ('math','img','a','code','sup','sub','br') if tag in parser.tags),'fragment')
+    preview={'kind':kind,'text':text[:240]}
+    if len(text)>240 or kind in ('math','img'):preview['preview_only']=True
+    return preview
+
+
+def pending(args):
+    c=read(Path(args.reader)/'content.json');units=list(all_units(c));selected=set()
+    requested=set(args.id or [])
+    unknown=requested-{u['id'] for _,u in units if not u.get('preserve')}
+    if unknown:raise ValueError('Unknown or preserved unit IDs: '+', '.join(sorted(unknown)))
+    if c.get('_html') and args.section:
+        root=html_layer().parse(args.reader,'content.en.html')
+        for section in root.xpath('.//section[@id=$id]',id=args.section):selected.update(section.xpath('.//*[@id]/@id'))
+    candidates=[(b,u) for b,u in units if not u.get('preserve')
+                and (u['id'] in requested if requested else u['zh'] is None)
+                and (not args.section or b['section']==args.section or b['section'].startswith(args.section+'.') or u['id'] in selected)]
+    batch=[];size=2
+    for b,u in candidates:
+        if len(batch)>=args.limit:break
+        styles=u.get('styles',{}).get('en',[])
+        entry={'id':u['id'],'en':u['en']}
+        if args.compact:
+            if u['tokens']:entry['tokens']={k:token_preview(v) for k,v in u['tokens'].items()}
+            if styles:entry['styles']=[{k:v for k,v in s.items() if k not in ('start','end')} for s in styles]
+        else:
+            entry.update(section=b['section'],type=b['type'],tokens=u['tokens'],styles=styles,source=b.get('source',{}))
+        if requested and u['zh'] is not None:entry['zh']=u['zh']
+        encoded=json.dumps(entry,ensure_ascii=False,separators=(',',':'))
+        added=len(encoded)+(1 if batch else 0)
+        if batch and size+added>args.max_chars:break
+        batch.append(encoded);size+=added
+        if size>args.max_chars:
+            print('One unit exceeds --max-chars; emitted intact to avoid skipping or truncating it.',file=sys.stderr)
+            break
+    print('['+','.join(batch)+']')
+    print(f'Emitted {len(batch)} of {len(candidates)} matching units; {size} JSON characters. '
+          'Apply this batch before requesting the next; use --id ID --full for details.',file=sys.stderr)
 
 
 def emphasis(element):
@@ -818,6 +870,12 @@ def main():
     e=subs.add_parser('extract');e.add_argument('input');e.add_argument('--output');e.add_argument('--docling',default='docling');e.add_argument('--docling-json');e.add_argument('--artifacts-path');e.add_argument('--ocr',action='store_true')
     a=subs.add_parser('align-html');a.add_argument('reader');a.add_argument('--html-file');a.add_argument('--url',required=True);a.add_argument('--version-evidence')
     n=subs.add_parser('pending');n.add_argument('reader');n.add_argument('--section')
+    n.add_argument('--limit',type=int,default=10,help='Maximum units per batch (default: 10)')
+    n.add_argument('--max-chars',type=int,default=8000,help='JSON character budget; one oversized unit is emitted intact (default: 8000)')
+    n.add_argument('--id',action='append',help='Inspect a specific unit, including translated units; repeat for multiple IDs')
+    detail=n.add_mutually_exclusive_group()
+    detail.add_argument('--compact',dest='compact',action='store_true',default=True,help='Readable token previews and necessary emphasis only (default)')
+    detail.add_argument('--full',dest='compact',action='store_false',help='Include original token markup and source metadata; still bounded')
     t=subs.add_parser('translate');t.add_argument('reader');t.add_argument('patch');t.add_argument('--replace',action='append',default=[])
     f=subs.add_parser('format');f.add_argument('reader');f.add_argument('--patch');f.add_argument('--replace',action='append',default=[])
     for name in ['render','check']:
@@ -827,6 +885,7 @@ def main():
         if name=='accept-source':s.add_argument('--review-note',required=True)
     cr=subs.add_parser('crop');cr.add_argument('reader');cr.add_argument('--page',type=int,required=True);cr.add_argument('--bbox',type=float,nargs=4,required=True);cr.add_argument('--name',required=True)
     args=p.parse_args()
+    if args.command=='pending' and (args.limit<1 or args.max_chars<1):p.error('--limit and --max-chars must be positive')
     if args.command not in ('resolve','pending','translate') and any(importlib.util.find_spec(n) is None for n in ('lxml','pypdfium2')):
         cli=shutil.which(args.docling if hasattr(args,'docling') else 'docling')
         candidate=Path(cli).resolve().parent/'python' if cli else None
@@ -856,13 +915,7 @@ def main():
         elif args.command=='format':format_content(args)
         elif args.command=='render':render(args)
         elif args.command=='check':return 2 if check(args)['errors'] else 0
-        elif args.command=='pending':
-            c=read(Path(args.reader)/'content.json')
-            selected=set()
-            if c.get('_html') and args.section:
-                root=html_layer().parse(args.reader,'content.en.html')
-                for section in root.xpath('.//section[@id=$id]',id=args.section):selected.update(section.xpath('.//*[@id]/@id'))
-            print(json.dumps([{'id':u['id'],'section':b['section'],'type':b['type'],'en':u['en'],'tokens':u['tokens'],'styles':u.get('styles',{}).get('en',[]),'source':b.get('source',{})} for b,u in all_units(c) if not u.get('preserve') and u['zh'] is None and (not args.section or b['section']==args.section or b['section'].startswith(args.section+'.') or u['id'] in selected)],ensure_ascii=False,indent=2))
+        elif args.command=='pending':pending(args)
         elif args.command=='crop':
             if Path(args.name).name!=args.name or not args.name.endswith('.png'):raise ValueError('Crop name must be a local PNG basename.')
             out=Path(args.reader);c=read(out/'content.json');crop_pdf(c['source']['pdf'],args.page,args.bbox,out/'assets'/args.name)

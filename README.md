@@ -67,13 +67,13 @@ python scripts/reader.py pending READER
 
 ```sh
 python scripts/reader.py translate READER /path/to/translation.json
-# 原文有文字強調時，依語意產生格式 patch：
+# 同批翻譯時產生強調格式 patch，先套用翻譯，再套用格式：
 python scripts/reader.py format READER --patch /path/to/emphasis.json
 python scripts/reader.py render READER
 python scripts/reader.py check READER
 ```
 
-可分批處理；重新執行 `pending` 僅列出尚未翻譯單元。`check` 發現缺譯或結構錯誤時返回非零代碼。機械檢查通過仍需要人工確認語意、PDF 完整性及瀏覽器顯示。
+`pending` 預設以精簡格式輸出最多 10 個單元、8,000 JSON 字元（單一超長段落完整輸出並提示），可用 `--limit`、`--max-chars` 調整。套用當批翻譯及格式後，再取得下一批；需要公式或來源細節時使用 `pending READER --id UNIT --full`。已驗收且未變更的來源可直接續翻，無須重做來源校對。`check` 發現缺譯或結構錯誤時返回非零代碼。機械檢查通過仍需要人工確認語意、PDF 完整性及瀏覽器顯示。
 
 正式內容為 `content.en.html`、`content.zh.html`；`index.html` 是生成檔，請勿直接修改。表格、圖內文字及不可靠的公式使用原始 PDF 圖像，圖片內文字不另外翻譯，圖說可翻譯。分享產出的 reader 時，本機來源請連同原 PDF 保留兩者相對位置；僅搬動 reader 會使「開啟 PDF」連結失效。重新產生／檢查時也需要來源 metadata 中所記錄的 PDF 路徑仍有效。
 

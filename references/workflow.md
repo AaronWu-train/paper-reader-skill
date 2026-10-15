@@ -15,9 +15,12 @@ python scripts/reader.py sync-source READER
 python scripts/reader.py render READER
 # Actually compare English/PDF and inspect the offline reader before acceptance.
 python scripts/reader.py accept-source READER --review-note "checks performed, findings, limitations"
-python scripts/reader.py pending READER --section S1
-python scripts/reader.py translate READER /path/to/translation.json
-python scripts/reader.py format READER --patch /path/to/emphasis.json
+python scripts/reader.py pending READER --section S1 --limit 10 --max-chars 8000
+# Produce/review both patches from this batch while it is in context; save them.
+python scripts/reader.py translate READER READER/source/translations/001.json
+python scripts/reader.py format READER --patch READER/source/translations/001-emphasis.json
+# Skip format for batches without source emphasis. Repeat pending only after applying.
+# Render/check once batches are finished (or when investigating an actual error).
 python scripts/reader.py render READER
 python scripts/reader.py check READER
 ```
@@ -48,7 +51,11 @@ Standard Docling needs layout/table models. Reuse a persistent cache with `--art
 
 ## Translation and emphasis
 
-`pending` emits only untranslated units; chapter selection includes subsections. Patches map IDs to translated strings with all `{{N}}` tokens conserved. Protected tokens reference original formulas, links, superscripts/subscripts and code. Patches are validated as a whole before saving Chinese HTML. Existing translations are protected; explicit `--replace ID` applies only to that unit and clears stale Chinese emphasis.
+`pending` defaults to compact JSON, at most 10 untranslated units and 8,000 serialized JSON characters. Chapter selection includes subsections. `--limit N` and `--max-chars N` must be positive. The first unit is emitted intact even if oversized, with a stderr warning; no prose is truncated or skipped. A short stderr summary gives emitted/matching counts and output size. This is a character budget, not a tokenizer or billing estimate. Apply a batch before fetching another; do not repeatedly dump the remaining article or raise limits just to load it all.
+
+Compact entries include `id`, `en`, readable protected-token previews and source `styles` only when present. They omit PDF coordinates, raw markup and emphasis offsets. Math/image previews are marked `preview_only`; they cannot express all mathematical structure. If structure affects translation, a preview is truncated, or a token is unclear, inspect that unit with `pending READER --id UNIT --full`. Repeat `--id` for a few specific units. Explicit ID selection can also inspect translated units (includes `zh`) when recovering unfinished emphasis; unknown/preserved IDs fail. `--full` restores original token markup, section/type and source metadata but keeps batch limits. `--compact` explicitly selects the default format. Stdout remains a JSON array, including `[]` when no units match; summaries go to stderr.
+
+Patches map IDs to translated strings with all `{{N}}` tokens conserved. Protected tokens reference original formulas, links, superscripts/subscripts and code; never insert preview descriptions into the translated string. Patches are validated as a whole before saving Chinese HTML. Existing translations are protected; explicit `--replace ID` applies only to that unit and clears stale Chinese emphasis.
 
 Strong/em/u and source-color annotations preserve original emphasis. Normalized content retains small `data-*` annotations for section membership, preservation, pending status, protected fragments and source-emphasis identity. They are stripped from the reading DOM. Do not include arbitrary source layout classes/styles. Original-math fragments may retain necessary MathML properties and sanitized equation-layout tables; prose/data tables remain PDF images.
 
@@ -56,7 +63,7 @@ The shared glossary starts empty. The optional [ML/RL glossary example](glossary
 
 English emphasis is collected during PDF extraction or HTML reconciliation. PDF font evidence requires exact text matching within Docling boxes; drawn underlines/scans still need visual review. Repeated formatting operations on normalized HTML do not rerun PDF extraction.
 
-Chinese emphasis aligns by meaning, without proportional character offsets. Apply the existing selection patch:
+While translating/reviewing each batch, produce both the translation patch and, only for units with source `styles`, a separate emphasis patch. Review completeness, negation, uncertainty, conditions, quantities and terminology in that same pass. Save both patches in `source/translations/` with matching batch names; apply translation first and emphasis second before fetching another batch. They remain separate validated commands, not an atomic pair: if interrupted after translation, apply the saved emphasis patch before continuing. Use `pending --id UNIT` for just the affected unit if recovery needs context. No patch schema change or second model pass is needed. Chinese emphasis aligns by meaning, without proportional character offsets. Apply the existing selection patch:
 
 ```json
 {"paragraph-id": [{"source": "f0", "text": "對應的中文片語", "occurrence": 1}]}
@@ -64,13 +71,15 @@ Chinese emphasis aligns by meaning, without proportional character offsets. Appl
 
 Occurrence is one-based and required for repeated phrases. Explicit selections retain source properties. Direct semantic HTML emphasis is supported; missing source correspondence is reported for manual alignment, never guessed. Format patches cannot change prose, and existing manual emphasis is protected. Stale/overlapping ranges, changed protected tokens and invalid mapped styles are rejected.
 
-Source repair/scaffolding precedes acceptance. If English/PDF/assets change after acceptance, translation stops until the source is reviewed and accepted again; do not overwrite existing Chinese to work around a conflict.
+Source repair/scaffolding precedes acceptance. On resume, reuse accepted source and completed review coverage; do not repeat extraction, HTML search/reconciliation or full PDF review for each batch. `translate` verifies English/PDF/asset fingerprints. If they change, translation stops until the affected source is reviewed and accepted again; do not overwrite existing Chinese or simply renew acceptance to work around a conflict.
 
 ## QA and regressions
 
 `check` preserves `quality-report.json.manual_reviews` and `source_review`, including legacy qa.json records. It checks bilingual structure/order, unique IDs, formula/link token content, missing translations, emphasis, original table crops, local assets, reference targets, inventories and PDF fingerprint. Repeated prose is a warning, not permission to delete it.
 
 Source completeness and semantic fidelity still require actual PDF/English comparison. Record method, scope, findings and limits. `accept-source` records that review and fingerprints files; it does not perform the review for you.
+
+Separate the work: review source completeness before acceptance; review translation semantics once per batch while translating; let Python check structure, IDs, tokens and assets. Run final render/check and inspect browser behavior once translation is finished. Recheck changed/unresolved passages or an actual rendering failure, rather than rereading all PDF/English/Chinese or running full browser QA per batch. Record reviewed batch IDs/ranges and unresolved issues in `manual_reviews` without duplicating article text. Do not claim semantic review coverage for passages not actually reviewed. Shared renderer/CSS/JS changes still require regressions.
 
 ```sh
 python -m unittest discover -s tests -p 'test_*.py'
