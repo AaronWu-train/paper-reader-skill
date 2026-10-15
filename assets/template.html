@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="zh-Hant" data-mode="@@DEFAULT_MODE@@">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>@@TITLE@@</title><link rel="stylesheet" href="assets/reader.css"><script defer src="assets/reader.js"></script></head>
+<body>
+<a class="skip" href="#paper">跳至正文</a>
+<header class="toolbar"><button id="toc-toggle" aria-controls="toc" aria-expanded="false">目錄</button><fieldset><legend class="sr-only">閱讀語言</legend><label><input type="radio" name="mode" value="zh" checked>中文</label><label><input type="radio" name="mode" value="en">English</label><label><input type="radio" name="mode" value="both">雙語</label></fieldset><a class="pdf-button" href="@@PDF_URL@@" target="_blank" rel="noopener" aria-label="開啟 PDF（新分頁）">開啟 PDF</a><button id="theme-toggle" aria-label="切換深色模式">深色／淺色</button></header>
+<nav id="toc" aria-label="章節目錄"><strong>目錄</strong><ol>@@TOC@@</ol><div class="source-info"><a href="@@PDF_URL@@">原始 PDF</a><a href="@@SOURCE_URL@@">輔助 HTML 來源</a><a href="quality-report.json">品質報告</a><a href="content.json">段落資料</a></div></nav>
+<main id="paper"><aside class="qa-notice">@@QA_NOTICE@@</aside>@@BODY@@<footer><a href="#paper">回到頂端</a></footer></main>
+</body></html>

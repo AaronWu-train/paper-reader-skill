@@ -1,0 +1,31 @@
+english	zh_tw	mode
+reinforcement learning	強化學習	english
+machine learning	機器學習	english
+imitation learning	模仿學習	english
+policy	策略	english
+observation	觀測	english
+action	動作	english
+reward	獎勵	english
+gradient	梯度	english
+inference	推論	english
+training	訓練	english
+loss	損失	english
+baseline	基準方法	english
+ablation	消融實驗	english
+hyperparameter	超參數	english
+encoder	編碼器	english
+embedding	嵌入表示	english
+Transformer	Transformer	english
+DDPM	DDPM	english
+score function	分數函數	first-bilingual
+visuomotor	視覺動作	first-bilingual
+receding-horizon control	滾動時域控制	first-bilingual
+stochastic Langevin dynamics	隨機 Langevin 動力學	first-bilingual
+multimodal distribution	多模態分布	first-bilingual
+FiLM	特徵逐項線性調制	first-bilingual
+denoising	去雜訊	first-bilingual
+explicit policy	顯式 policy	first-bilingual
+implicit policy	隱式 policy	first-bilingual
+energy landscape	能量地形	first-bilingual
+Linear Quadratic Regulator	線性二次調節器	first-bilingual
+mixture density network	混合密度網路	first-bilingual

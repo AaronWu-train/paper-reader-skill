@@ -1,0 +1,5 @@
+# Versions used by the existing extraction pipeline and regression suite.
+docling==2.138.0
+lxml==6.1.3
+pypdfium2==5.14.0
+Pillow==12.3.0
